@@ -2,7 +2,7 @@
 
 I wanted to make a tool for Windows instead, but that was too much effort for my liking. So, here you go.
 
-![](readme_res/rom000.png "The Interface")
+![](readme_res/rom000.png "The entire program.")
 
 Here's what you get:
 
@@ -14,7 +14,7 @@ Here's the controls:
 
 - D-PAD: Move cursor
 - A/B/C + Up/Down: Increment Red/Green/Blue channel on selected color
-- A + Left/Right: Change selected slot
+- Start + Left/Right: Change selected slot
 - A + Start: Save current slot
   - NOTE: no warning is issued after sending this command. All decisions are final.
 - A+B+C + Start: Overwrite ALL slots with the currently selected one

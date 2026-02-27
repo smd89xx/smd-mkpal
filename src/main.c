@@ -3,10 +3,14 @@
 
 #define PALETTE_MAX 256
 
+#define MSG_FMTD        0
+#define MSG_SAVED       1
+#define MSG_PREVSAVED   2
+
 #define INPUTMODE_MODIFY    0
 #define INPUTMODE_SWAPSET   1
 
-#define TILE2PX(x)  (x) << 3
+#define SEC2FRAME(x)    (x) * (60 - (10 * IS_PAL_SYSTEM))
 
 typedef struct
 {
@@ -18,8 +22,10 @@ const u16 basetile_cursor = TILE_ATTR_FULL(PAL0,FALSE,FALSE,FALSE,1);
 u8 pal_idx = 0;
 u8 line_idx = PAL0;
 u8 clr_idx = 0;
-u8 input_mode = INPUTMODE_MODIFY;
 u16 palette[64];
+u8 timer = 0;
+bool run_timer = false;
+const char* msgs[] = {"SRAM cleared.", "Current palette saved.","Previous palette saved."};
 
 static void move_cursor(Vect2D_s8 delta)
 {
@@ -45,36 +51,22 @@ static void mod_cram(s8 dr, s8 dg, s8 db)
     move_cursor((Vect2D_s8){0,0});
 }
 
-static void fmt_sram()
+static void reset_timer()
 {
-    PAL_getColors(0,palette,64);
-    SRAM_enable();
-    for (u16 i = 0; i < PALETTE_MAX; i++)
-    {
-        for (u8 j = 0; j < 64; j++)
-        {
-            SRAM_writeWord((i*128)+(j*sizeof(u16)),palette[j]);
-        }
-    }
-    SRAM_disable();
-    VDP_clearTextLine(27);
-    VDP_drawText("SRAM cleared.",0,27);
+    run_timer = true; timer = SEC2FRAME(1.5f);
 }
 
-static void save_slot()
+static void draw_msg(u8 idx,...)
 {
-    PAL_getColors(0,palette,sizeof(palette)/sizeof(u16));
-    SRAM_enable();
-    for (u8 i = 0; i < sizeof(palette)/sizeof(u16); i++)
-    {
-        SRAM_writeWord((pal_idx*sizeof(palette))+(i<<1),palette[i]);
-    }
-    SRAM_disable();
-    VDP_clearTextArea(0,26,40,2);
-    VDP_drawText("Palette saved to selected slot",0,26);
-    char mem_str[24];
-    sprintf(mem_str,"and memory offset $%04X",(u32)palette&0x0000FFFF);
-    VDP_drawText(mem_str,0,27);
+    const char* msgptr = msgs[idx];
+    va_list args;
+    va_start(args,msgptr);
+    char fmtd[41];
+    vsprintf(fmtd,msgptr,args);
+    va_end(args);
+    VDP_clearTextLine(27);
+    VDP_drawText(fmtd,0,27);
+    reset_timer();
 }
 
 static void load_slot(s8 delta)
@@ -90,13 +82,39 @@ static void load_slot(s8 delta)
     char slot_hdr[19];
     sprintf(slot_hdr,"Using Slot %03u/%03u",pal_idx+1,PALETTE_MAX);
     VDP_drawText(slot_hdr,basepos_line.x,basepos_line.y);
+    move_cursor((Vect2D_s8){0,0});
+}
+
+static void fmt_sram()
+{
+    memcpy(palette,pal_default,sizeof(palette));
+    SRAM_enable();
+    for (u16 i = 0; i < PALETTE_MAX; i++)
+    {
+        for (u8 j = 0; j < 64; j++)
+        {
+            SRAM_writeWord((i*128)+(j*sizeof(u16)),palette[j]);
+        }
+    }
+    SRAM_disable();
+    load_slot(0);
+    draw_msg(MSG_FMTD);
+}
+
+static void save_slot()
+{
+    PAL_getColors(0,palette,sizeof(palette)/sizeof(u16));
+    SRAM_enable();
+    for (u8 i = 0; i < sizeof(palette)/sizeof(u16); i++)
+    {
+        SRAM_writeWord((pal_idx*sizeof(palette))+(i<<1),palette[i]);
+    }
+    SRAM_disable();
+    draw_msg(MSG_SAVED);
 }
 
 static void handle_input(u16 joy, u16 changed, u16 state)
 {
-    switch (input_mode)
-    {
-        default:
             if (changed & state & BUTTON_DOWN)
             {
                 if (!(state & (BUTTON_A | BUTTON_B | BUTTON_C)))
@@ -139,9 +157,10 @@ static void handle_input(u16 joy, u16 changed, u16 state)
             }
             if (changed & state & BUTTON_LEFT)
             {
-                if (state & BUTTON_A)
+                if (state & BUTTON_START)
                 {
                     save_slot();
+                    draw_msg(MSG_PREVSAVED);
                     load_slot(-1);
                     return;
                 }
@@ -149,9 +168,10 @@ static void handle_input(u16 joy, u16 changed, u16 state)
             }
             else if (changed & state & BUTTON_RIGHT)
             {
-                if (state & BUTTON_A)
+                if (state & BUTTON_START)
                 {
                     save_slot();
+                    draw_msg(MSG_PREVSAVED);
                     load_slot(1);
                     return;
                 }
@@ -162,8 +182,6 @@ static void handle_input(u16 joy, u16 changed, u16 state)
                 if (((state & BUTTON_A)&&(state & BUTTON_B)&&(state & BUTTON_C))){fmt_sram();}
                 else if (state & BUTTON_A){save_slot();}
             }
-            break;
-    }
 }
 
 int main()
@@ -180,6 +198,15 @@ int main()
     JOY_setEventHandler(&handle_input);
     while(1)
     {
+        if (run_timer)
+        {
+            timer--;
+            if (timer == 0)
+            {
+                VDP_clearTextArea(0,26,screenWidth >> 3,2);
+                run_timer = false;
+            }
+        }
         SYS_doVBlankProcess();
     }
     return (0);
