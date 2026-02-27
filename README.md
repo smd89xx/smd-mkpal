@@ -17,7 +17,7 @@ Here's the controls:
 - Start + Left/Right: Change selected slot
 - A + Start: Save current slot
   - NOTE: no warning is issued after sending this command. All decisions are final.
-- A+B+C + Start: Overwrite ALL slots with the currently selected one
+- A+B+C + Start: Overwrite ALL slots with the program's default palette
   - NOTE: no warning is issued after sending this command. All decisions are final.
 
 This project was made using [SGDK](https://github.com/Stephane-D/SGDK). Your existing SGDK workspace should build this with no issues.
